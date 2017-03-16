@@ -45,7 +45,9 @@ ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
         return -EFAULT;
     }
     
-    return 0;
+    printk(KERN_ALERT "%c", onebyte_data);
+    
+    return SIZE;
 }
 
 ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t *f_pos)
@@ -53,12 +55,13 @@ ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t 
     if (copy_from_user(onebyte_data, buf, SIZE)) {
         return -EFAULT;
     }
+    printk(KERN_ALERT "%d", count);
     
     if (count > SIZE) {
         return -ENOSPC;
     }
     
-    return 0;
+    return SIZE;
 }
 
 static int onebyte_init(void)
