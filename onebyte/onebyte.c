@@ -41,7 +41,8 @@ int onebyte_release(struct inode *inode, struct file *filep)
 
 ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
 {
-    // return if reach end of file
+    // read() will be called again if return value is not 0
+    // return 0 if reach end of file
     if (*f_pos) {
         return 0;
     }
@@ -52,8 +53,6 @@ ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
     
     *f_pos += LEN;
     count -= LEN;
-    
-    printk(KERN_ALERT "%s", onebyte_data);
     
     return LEN;
 }
@@ -67,10 +66,7 @@ ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t 
     *f_pos += LEN;
     count -= LEN;
     
-    printk(KERN_ALERT "%lu", count);
-    
-    // length of buf more than length of one byte and null terminator
-    if (count > 1) {
+    if (count) {
         return -ENOSPC;
     }
     
