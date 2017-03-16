@@ -9,7 +9,7 @@
 #include <asm/uaccess.h>
 
 #define MAJOR_NUMBER 61
-#define LEN 2  // length of onebyte_data and null terminator
+#define LEN 1  // length of onebyte_data
 
 /* forward declaration */
 int onebyte_open(struct inode *inode, struct file *filep);
@@ -69,7 +69,8 @@ ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t 
     
     printk(KERN_ALERT "%lu", count);
     
-    if (!count) {
+    // length of buf more than length of one byte and null terminator
+    if (count > 1) {
         return -ENOSPC;
     }
     
