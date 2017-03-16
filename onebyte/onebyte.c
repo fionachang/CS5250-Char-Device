@@ -29,28 +29,28 @@ struct file_operations onebyte_fops = {
 
 char *onebyte_data = NULL;
 
-int onebyte_open(struct inode *inode, struct file *filep);
+int onebyte_open(struct inode *inode, struct file *filep)
 {
     return 0;   // always successful
 }
 
-int onebyte_release(struct inode *inode, struct file *filep);
+int onebyte_release(struct inode *inode, struct file *filep)
 {
     return 0;   // always successful
 }
 
-ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos);
+ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
 {
-    if (copy_to_user(buf, onebyte_data, SIZE) {
+    if (copy_to_user(buf, onebyte_data, SIZE)) {
         return -EFAULT;
     }
     
     return 0;
 }
 
-ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t *f_pos);
+ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t *f_pos)
 {
-    if (copy_from_user(onebyte_data, buf, SIZE) {
+    if (copy_from_user(onebyte_data, buf, SIZE)) {
         return -EFAULT;
     }
     
@@ -106,7 +106,7 @@ static void onebyte_exit(void)
     // unregister the device
     unregister_chrdev(MAJOR_NUMBER, "onebyte");
     
-    printk(KERN_ALRET "Onebyte device module is unloaded\n");
+    printk(KERN_ALERT "Onebyte device module is unloaded\n");
 }
 
 MODULE_LICENSE("GPL");
