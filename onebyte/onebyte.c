@@ -9,6 +9,7 @@
 #include <asm/uaccess.h>
 
 #define MAJOR_NUMBER 61
+#define SIZE 1
 
 /* forward declaration */
 int onebyte_open(struct inode *inode, struct file *filep);
@@ -40,12 +41,24 @@ int onebyte_release(struct inode *inode, struct file *filep);
 
 ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos);
 {
-
+    if (copy_to_user(buf, onebyte_data, SIZE) {
+        return -EFAULT;
+    }
+    
+    return 0;
 }
 
 ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t *f_pos);
 {
-
+    if (copy_from_user(onebyte_data, buf, SIZE) {
+        return -EFAULT;
+    }
+    
+    if (count > SIZE) {
+        return -ENOSPC;
+    }
+    
+    return 0;
 }
 
 static int onebyte_init(void)
