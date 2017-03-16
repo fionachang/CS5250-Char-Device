@@ -46,6 +46,7 @@ ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
     }
     
     *f_pos += SIZE;
+    count -= SIZE;
     
     printk(KERN_ALERT "%s", onebyte_data);
     
@@ -59,10 +60,11 @@ ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t 
     }
     
     *f_pos += SIZE;
+    count -= SIZE;
     
     printk(KERN_ALERT "%lu", count);
     
-    if (count > SIZE) {
+    if (!count) {
         return -ENOSPC;
     }
     
