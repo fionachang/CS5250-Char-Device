@@ -14,7 +14,8 @@
 #define ONEBYTE_HELLO _IO(MAJOR_NUMBER, 0)
 #define ONEBYTE_SETDEVMSG _IOW(MAJOR_NUMBER, 1, char*)
 #define ONEBYTE_GETDEVMSG _IOR(MAJOR_NUMBER, 2, char*)
-#define ONEBYTE_IOC_MAXNR 2
+#define ONEBYTE_GETSETDEVMSG _IOWR(MAJOR_NUMBER, 3, char*)
+#define ONEBYTE_IOC_MAXNR 3
 
 #define MAX_LEN 4194304  // length of onebyte_data: 4MB = 4 * 2^20 bytes
 
@@ -57,6 +58,7 @@ int onebyte_release(struct inode *inode, struct file *filep)
 ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
 {
     size_t read_len;
+    int err;
     
     // read() will be called again if return value is not 0
     // return 0 if reach end of file
@@ -70,8 +72,10 @@ ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
         read_len = count;
     }
     
-    if (copy_to_user(buf, &onebyte_data[*f_pos], read_len)) {
-        return -EFAULT;
+    err = copy_to_user(buf, &onebyte_data[*f_pos], read_len);
+    
+    if (err) {
+        return err;
     }
     
     *f_pos += read_len;
@@ -83,6 +87,7 @@ ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
 ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t *f_pos)
 {
     size_t write_len, new_len;
+    int err;
     
     if (*f_pos >= MAX_LEN) {
         return -ENOSPC;
@@ -96,8 +101,10 @@ ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t 
         write_len = count;
     }
     
-    if (copy_from_user(&onebyte_data[*f_pos], buf, write_len)) {
-        return -EFAULT;
+    err = copy_from_user(&onebyte_data[*f_pos], buf, write_len);
+    
+    if (err) {
+        return err;
     }
     
     new_len = *f_pos + write_len;
@@ -143,7 +150,8 @@ long onebyte_ioctl (struct file *filep, unsigned int cmd, unsigned long arg)
 {
     long ret_val;
     int err;
-    char *usr_msg;
+    char *usr_msg, *tmp_msg;
+    size_t tmp_len;
     
     ret_val = 0;
     err = 0;
@@ -172,6 +180,8 @@ long onebyte_ioctl (struct file *filep, unsigned int cmd, unsigned long arg)
             printk(KERN_WARNING "hello\n");
             break;
         case ONEBYTE_SETDEVMSG:
+            // assuming null terminated strings
+            
             usr_msg = (char*)arg;
             msg_len = strlen_user(usr_msg);
             
@@ -187,11 +197,14 @@ long onebyte_ioctl (struct file *filep, unsigned int cmd, unsigned long arg)
                     return -ENOMEM;
                 }
                 
-                if (copy_from_user(dev_msg, usr_msg, msg_len)) {
+                err = copy_from_user(dev_msg, usr_msg, msg_len);
+                
+                if (err) {
                     kfree(dev_msg);
                     dev_msg = NULL;
+                    msg_len = 0;
                     
-                    return -EFAULT;
+                    return err;
                 }
             }
             
@@ -201,8 +214,44 @@ long onebyte_ioctl (struct file *filep, unsigned int cmd, unsigned long arg)
             
             usr_msg = (char*)arg;
             
-            if (copy_to_user(usr_msg, dev_msg, msg_len)) {
-                return -EFAULT;
+            err = copy_to_user(usr_msg, dev_msg, msg_len);
+            
+            if (err) {
+                return err;
+            }
+            
+            break;
+        case ONEBYTE_GETSETDEVMSG:
+            usr_msg = (char*)arg;
+            
+            if (dev_msg) {
+                tmp_msg = dev_msg;
+                dev_msg = NULL;
+            } else {
+                tmp_msg = kmalloc(sizeof(char), GFP_KERNEL);
+                
+                if (!tmp_msg) {
+                    return -ENOMEM;
+                }
+                
+                tmp_msg[0] = 0;
+            }
+            
+            tmp_len = msg_len;
+            err = onebyte_ioctl(filep, ONEBYTE_SETDEVMSG, arg);
+            
+            if (err) {
+                kfree(tmp_msg);
+                return err;
+            }
+            
+            printk(KERN_ALERT "%s\n", dev_msg);
+            
+            err = copy_to_user(usr_msg, tmp_msg, tmp_len);
+            kfree(tmp_msg);
+            
+            if (err) {
+                return err;
             }
             
             break;
