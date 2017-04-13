@@ -6,9 +6,14 @@
 #include <linux/types.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
+#include <linux/ioctl.h>
 #include <asm/uaccess.h>
 
 #define MAJOR_NUMBER 61
+
+#define ONEBYTE_HELLO _IO(MAJOR_NUMBER, 0)
+#define ONEBYTE_IOC_MAXNR 0
+
 #define MAX_LEN 4194304  // length of onebyte_data: 4MB = 4 * 2^20 bytes
 
 /* forward declaration */
@@ -16,17 +21,19 @@ int onebyte_open(struct inode *inode, struct file *filep);
 int onebyte_release(struct inode *inode, struct file *filep);
 ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos);
 ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t *f_pos);
-loff_t onebyte_llseek (struct file *filep, loff_t offset, int whence);
+loff_t onebyte_llseek(struct file *filep, loff_t offset, int whence);
+long onebyte_ioctl(struct file *filep, unsigned int cmd, unsigned long arg);
 static int onebyte_init(void);
 static void onebyte_exit(void);
 
 /* definition of file_operation structure */
 struct file_operations onebyte_fops = {
-    read:       onebyte_read,
-    write:      onebyte_write,
-    llseek:     onebyte_llseek,
-    open:       onebyte_open,
-    release:    onebyte_release
+    read:           onebyte_read,
+    write:          onebyte_write,
+    llseek:         onebyte_llseek,
+    unlocked_ioctl: onebyte_ioctl,
+    open:           onebyte_open,
+    release:        onebyte_release
 };
 
 char *onebyte_data = NULL;
@@ -125,6 +132,45 @@ loff_t onebyte_llseek (struct file *filep, loff_t offset, int whence)
     filep->f_pos = new_offset;
     
     return new_offset;
+}
+
+long onebyte_ioctl (struct file *filep, unsigned int cmd, unsigned long arg)
+{
+    long ret_val;
+    int err;
+    
+    ret_val = 0;
+    err = 0;
+    
+    // extract the type and number bitfields, and don't decode
+    // wrong cmds: return ENOTTY (inappropriate ioctl) before access_ok()
+    if (_IOC_TYPE(cmd) != MAJOR_NUMBER || _IOC_NR(cmd) > ONEBYTE_IOC_MAXNR) {
+        return -ENOTTY;
+    }
+    
+    // direction is a bitmask, and VERIFY_WRITE catches R/W
+    // transfers. 'Type' is user-oriented, while
+    // access_ok is kernel-oriented, so the concept of "read" and "write" is reversed
+    if (_IOC_DIR(cmd) & _IOC_READ) {
+        err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
+    } else if (_IOC_DIR(cmd) & _IOC_WRITE) {
+        err = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
+    }
+    
+    if (err) {
+        return -EFAULT;
+    }
+    
+    switch (cmd) {
+        case ONEBYTE_HELLO:
+            printk(KERN_WARNING "hello\n");
+            break;
+        default:
+            // redundant, as cmd was checked against MAXNR
+            return -ENOTTY;
+    }
+    
+    return ret_val;
 }
 
 static int onebyte_init(void)
