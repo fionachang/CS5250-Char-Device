@@ -12,7 +12,9 @@
 #define MAJOR_NUMBER 61
 
 #define ONEBYTE_HELLO _IO(MAJOR_NUMBER, 0)
-#define ONEBYTE_IOC_MAXNR 0
+#define ONEBYTE_SETDEVMSG _IOW(MAJOR_NUMBER, 1, char*)
+#define ONEBYTE_GETDEVMSG _IOR(MAJOR_NUMBER, 2, char*)
+#define ONEBYTE_IOC_MAXNR 2
 
 #define MAX_LEN 4194304  // length of onebyte_data: 4MB = 4 * 2^20 bytes
 
@@ -38,6 +40,9 @@ struct file_operations onebyte_fops = {
 
 char *onebyte_data = NULL;
 size_t len = 0;
+
+char *dev_msg = NULL;
+size_t msg_len = 0;
 
 int onebyte_open(struct inode *inode, struct file *filep)
 {
@@ -138,6 +143,7 @@ long onebyte_ioctl (struct file *filep, unsigned int cmd, unsigned long arg)
 {
     long ret_val;
     int err;
+    char *usr_msg;
     
     ret_val = 0;
     err = 0;
@@ -164,6 +170,41 @@ long onebyte_ioctl (struct file *filep, unsigned int cmd, unsigned long arg)
     switch (cmd) {
         case ONEBYTE_HELLO:
             printk(KERN_WARNING "hello\n");
+            break;
+        case ONEBYTE_SETDEVMSG:
+            usr_msg = (char*)arg;
+            msg_len = strlen_user(usr_msg);
+            
+            if (dev_msg) {
+                kfree(dev_msg);
+                dev_msg = NULL;
+            }
+            
+            if (msg_len) {
+                dev_msg = kmalloc(msg_len*sizeof(char), GFP_KERNEL);
+                
+                if (!dev_msg) {
+                    return -ENOMEM;
+                }
+                
+                if (copy_from_user(dev_msg, usr_msg, msg_len)) {
+                    kfree(dev_msg);
+                    dev_msg = NULL;
+                    
+                    return -EFAULT;
+                }
+            }
+            
+            break;
+        case ONEBYTE_GETDEVMSG:
+            // assuming arg has enough space to store dev_msg
+            
+            usr_msg = (char*)arg;
+            
+            if (copy_to_user(usr_msg, dev_msg, msg_len)) {
+                return -EFAULT;
+            }
+            
             break;
         default:
             // redundant, as cmd was checked against MAXNR
