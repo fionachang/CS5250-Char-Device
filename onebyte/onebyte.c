@@ -9,7 +9,7 @@
 #include <asm/uaccess.h>
 
 #define MAJOR_NUMBER 61
-#define LEN 1  // length of onebyte_data
+#define MAX_LEN 4194304  // length of onebyte_data: 4MB = 4 * 2^20 bytes
 
 /* forward declaration */
 int onebyte_open(struct inode *inode, struct file *filep);
@@ -28,6 +28,7 @@ struct file_operations onebyte_fops = {
 };
 
 char *onebyte_data = NULL;
+size_t len = 0;
 
 int onebyte_open(struct inode *inode, struct file *filep)
 {
@@ -41,36 +42,53 @@ int onebyte_release(struct inode *inode, struct file *filep)
 
 ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
 {
+    size_t read_len;
+    
     // read() will be called again if return value is not 0
     // return 0 if reach end of file
-    if (*f_pos) {
+    if (*f_pos >= len) {
         return 0;
     }
     
-    if (copy_to_user(buf, onebyte_data, LEN)) {
+    read_len = len - *f_pos;
+    
+    if (count < read_len) {
+        read_len = count;
+    }
+    
+    if (copy_to_user(buf, &onebyte_data[*f_pos], read_len)) {
         return -EFAULT;
     }
     
-    *f_pos += LEN;
-    count -= LEN;
+    *f_pos += read_len;
+    count -= read_len;
     
-    return LEN;
+    return read_len;
 }
 
 ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t *f_pos)
 {
-    if (copy_from_user(onebyte_data, buf, LEN)) {
-        return -EFAULT;
-    }
+    size_t write_len;
     
-    *f_pos += LEN;
-    count -= LEN;
-    
-    if (count) {
+    if (*f_pos >= MAX_LEN) {
         return -ENOSPC;
     }
     
-    return LEN;
+    write_len = MAX_LEN - *f_pos;
+    
+    if (count < write_len) {
+        write_len = count;
+    }
+    
+    if (copy_from_user(&onebyte_data[*f_pos], buf, write_len)) {
+        return -EFAULT;
+    }
+    
+    len = *f_pos + write_len;
+    *f_pos += write_len;
+    count -= write_len;
+    
+    return write_len;
 }
 
 static int onebyte_init(void)
@@ -88,7 +106,7 @@ static int onebyte_init(void)
     // kmalloc is just like malloc, the second parameter is
     // the type of memory to be allocated.
     // To release the memory allocated by kmalloc, use kfree.
-    onebyte_data = kmalloc(sizeof(char), GFP_KERNEL);
+    onebyte_data = kmalloc(MAX_LEN*sizeof(char), GFP_KERNEL);
     
     if (!onebyte_data) {
         onebyte_exit();
@@ -100,6 +118,7 @@ static int onebyte_init(void)
     
     // initialize the value to be X
     *onebyte_data = 'X';
+    len = 1;
     
     printk(KERN_ALERT "This is a onebyte device module\n");
     
