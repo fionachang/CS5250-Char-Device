@@ -16,6 +16,7 @@ int onebyte_open(struct inode *inode, struct file *filep);
 int onebyte_release(struct inode *inode, struct file *filep);
 ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos);
 ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t *f_pos);
+loff_t onebyte_llseek (struct file *filep, loff_t offset, int whence);
 static int onebyte_init(void);
 static void onebyte_exit(void);
 
@@ -23,6 +24,7 @@ static void onebyte_exit(void);
 struct file_operations onebyte_fops = {
     read:       onebyte_read,
     write:      onebyte_write,
+    llseek:     onebyte_llseek,
     open:       onebyte_open,
     release:    onebyte_release
 };
@@ -68,10 +70,12 @@ ssize_t onebyte_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
 
 ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t *f_pos)
 {
-    size_t write_len;
+    size_t write_len, new_len;
     
     if (*f_pos >= MAX_LEN) {
         return -ENOSPC;
+    } else if (*f_pos > len) {
+        return -EFAULT;
     }
     
     write_len = MAX_LEN - *f_pos;
@@ -84,11 +88,43 @@ ssize_t onebyte_write(struct file *filep, const char *buf, size_t count, loff_t 
         return -EFAULT;
     }
     
-    len = *f_pos + write_len;
+    new_len = *f_pos + write_len;
+    
+    if (new_len > len) {
+        len = new_len;
+    }
+    
     *f_pos += write_len;
     count -= write_len;
     
     return write_len;
+}
+
+loff_t onebyte_llseek (struct file *filep, loff_t offset, int whence)
+{
+    loff_t new_offset;
+    
+    switch (whence) {
+        case SEEK_SET:
+            new_offset = offset;
+            break;
+        case SEEK_CUR:
+            new_offset = filep->f_pos + offset;
+            break;
+        case SEEK_END:
+            new_offset = len - 1 + offset;
+            break;
+        default:
+            return -EINVAL;
+    }
+    
+    if (new_offset < 0 || new_offset >= len) {
+        return -EINVAL;
+    }
+    
+    filep->f_pos = new_offset;
+    
+    return new_offset;
 }
 
 static int onebyte_init(void)
